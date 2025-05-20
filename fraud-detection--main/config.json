@@ -1,0 +1,84 @@
+{
+    "data_source": {
+        "use_real_data": true,
+        "csv_file_path": "prepared_fraud_data.csv",
+        "csv_separator": ",",
+        "csv_encoding": "utf-8",
+        "data_has_header": true
+    },
+    "data_processing": {
+        "num_samples": 2000,
+        "fraud_ratio": 0.2,
+        "test_size": 0.2,
+        "random_state": 42,
+        "target_column": "fraud_Cases",
+        "pca": {
+            "enabled": true,
+            "n_components": 7,
+            "whiten": false,
+            "svd_solver": "auto"
+        },
+        "discretization": {
+            "enabled": true,
+            "bins": 3,
+            "labels": ["low", "med", "high"],
+            "strategy": "quantile"
+        },
+        "downsampling": {
+            "enabled": true,
+            "non_fraud_to_fraud_ratio": 2
+        }
+    },
+    "bayesian_model": {
+        "structure": {
+            "use_predefined": true,
+            "learn_from_data": false
+        },
+        "estimators": {
+            "mle": {
+                "enabled": true
+            },
+            "bayes": {
+                "enabled": true,
+                "prior_type": "BDeu",
+                "equivalent_sample_size": 0.5,
+                "pseudocount": 2
+            }
+        },
+        "prediction": {
+            "mle": {
+                "threshold": 0.5
+            },
+            "bayes": {
+                "threshold": 0.65,
+                "adjust_probabilities": true
+            }
+        }
+    },
+    "structure_learning": {
+        "algorithm": "hill_climbing",
+        "scoring_method": "bdeu",
+        "max_indegree": 3,
+        "max_iter": 10000
+    },
+    "output": {
+        "save_models": true,
+        "save_metrics": true,
+        "directories": {
+            "models": "models",
+            "results": "results",
+            "plots": "plots",
+            "test_results": "test_results"
+        },
+        "plots": {
+            "generate_confusion_matrix": true,
+            "generate_roc_curve": true,
+            "generate_metrics_plot": true,
+            "generate_network_structure": true
+        }
+    },
+    "testing": {
+        "fraud_ratios": [0.05, 0.1, 0.2, 0.3, 0.4],
+        "num_samples": 500
+    }
+} 
