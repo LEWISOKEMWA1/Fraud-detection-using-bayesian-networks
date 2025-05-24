@@ -127,7 +127,7 @@ def plot_feature_importance(pca_explained_variance_ratio, title='PCA Components 
     plt.tight_layout()
     return plt.gcf()
 
-def save_all_plots(metrics, model, pca_explained_variance_ratio=None, output_dir='plots', plot_config=None):
+def save_all_plots(metrics, y_true_labels, model, pca_explained_variance_ratio=None, output_dir='plots', plot_config=None):
     """Save all visualization plots to files."""
     import os
     os.makedirs(output_dir, exist_ok=True)
@@ -148,7 +148,7 @@ def save_all_plots(metrics, model, pca_explained_variance_ratio=None, output_dir
     
     # Plot and save ROC curve
     if plot_config.get("generate_roc_curve", True):
-        roc_fig = plot_roc_curve(metrics['y_pred'], metrics['y_probs'])
+        roc_fig = plot_roc_curve(y_true_labels, metrics['y_probs'])
         roc_fig.savefig(os.path.join(output_dir, 'roc_curve.png'))
     
     # Plot and save metrics comparison

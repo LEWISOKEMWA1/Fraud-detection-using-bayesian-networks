@@ -33,7 +33,14 @@ class DynamicDataProcessor:
         self.num_scaler = None
         self.cat_encoder = None
         self.pca_transformer = None
-    
+        self.pca_n_components_determined = None
+        
+        # PCA configuration for dynamic n_components
+        pca_config = self.data_config.get("pca", {}) # Ensure pca key exists or default to empty dict
+        self.pca_target_variance = pca_config.get("target_variance", 0.60)
+        self.min_pca_components = pca_config.get("min_components", 4)
+        self.max_pca_components = pca_config.get("max_components", 10)
+
     def detect_column_types(self, df: pd.DataFrame) -> None:
         """
         Automatically detect column types in the DataFrame.
@@ -161,28 +168,78 @@ class DynamicDataProcessor:
         # Skip if PCA is disabled
         if not self.data_config["pca"]["enabled"]:
             return df
-            
-        n_components = self.data_config["pca"]["n_components"]
+
         features = df.drop(columns=[self.target_column])
+
+        if features.empty:
+            print("Warning: No features available for PCA after dropping target column.")
+            self.pca_n_components_determined = 0
+            self.pca_transformer = None
+            self.explained_variance_ratio = []
+            return df
+
+        # Determine n_components dynamically
+        pca_full = PCA(random_state=self.data_config["random_state"])
+        pca_full.fit(features)
         
-        # Initialize and fit PCA
+        cumulative_variance = np.cumsum(pca_full.explained_variance_ratio_)
+        
+        # Find components needed for target variance
+        # Check if any component meets the target variance, otherwise, np.argmax might return 0 for all-false array
+        if np.any(cumulative_variance >= self.pca_target_variance):
+            n_components_for_variance = np.argmax(cumulative_variance >= self.pca_target_variance) + 1
+        else:
+            # If no single component or combination reaches target_variance, use all components
+            n_components_for_variance = features.shape[1] 
+            print(f"Warning: Target variance {self.pca_target_variance} not reached. Using all {n_components_for_variance} features initially.")
+
+        # Apply min/max bounding
+        if n_components_for_variance < self.min_pca_components:
+            final_n_components = self.min_pca_components
+        elif n_components_for_variance > self.max_pca_components:
+            final_n_components = self.max_pca_components
+        else:
+            final_n_components = n_components_for_variance
+            
+        # Ensure final_n_components is not more than available features and at least 1 (if features exist)
+        final_n_components = min(final_n_components, features.shape[1])
+        if features.shape[1] > 0 : # ensure at least 1 component if features exist
+            final_n_components = max(1, final_n_components)
+        else: # if no features, then 0 components
+             final_n_components = 0
+        
+        self.pca_n_components_determined = final_n_components
+        print(f"PCA: Target Var: {self.pca_target_variance}, Initial Comp: {n_components_for_variance}, Min Comp: {self.min_pca_components}, Max Comp: {self.max_pca_components} -> Final n_components: {self.pca_n_components_determined}")
+
+        # Apply PCA with determined n_components, only if final_n_components > 0
+        if self.pca_n_components_determined == 0:
+            print("PCA: No components selected. Skipping PCA transformation.")
+            self.pca_transformer = None
+            self.explained_variance_ratio = []
+            # If PCA is skipped, return the original df but ensure target column is at the end if it was manipulated
+            # For consistency, ensure df has target column correctly handled if it was part of 'features' initially
+            # However, 'features' is df.drop(columns=[self.target_column]), so df itself is unchanged here.
+            return df
+
         self.pca_transformer = PCA(
-            n_components=n_components,
+            n_components=self.pca_n_components_determined,
             whiten=self.data_config["pca"]["whiten"],
             svd_solver=self.data_config["pca"]["svd_solver"],
             random_state=self.data_config["random_state"]
         )
         pca_result = self.pca_transformer.fit_transform(features)
         
-        # Create DataFrame with PCA components
+        # Create DataFrame with PCA components (0-indexed)
         pca_df = pd.DataFrame(
             pca_result,
-            columns=[f'PCA_{i+1}' for i in range(n_components)],
+            columns=[f'PCA_{i}' for i in range(self.pca_n_components_determined)],
             index=df.index
         )
         
         # Add target column
-        pca_df[self.target_column] = df[self.target_column]
+        target_series = df[self.target_column].reset_index(drop=True)
+        pca_df = pca_df.reset_index(drop=True)
+        pca_df[self.target_column] = target_series
         
         # Store the explained variance for later use
         self.explained_variance_ratio = self.pca_transformer.explained_variance_ratio_
@@ -313,7 +370,7 @@ class DynamicDataProcessor:
             # Create PCA DataFrame
             pca_df = pd.DataFrame(
                 pca_result,
-                columns=[f'PCA_{i+1}' for i in range(self.data_config["pca"]["n_components"])],
+                columns=[f'PCA_{i}' for i in range(self.pca_n_components_determined)],
                 index=processed_df.index
             )
             
@@ -352,13 +409,13 @@ class DynamicDataProcessor:
         Returns:
             Dictionary with PCA statistics
         """
-        if not self.data_config["pca"]["enabled"] or not hasattr(self, 'pca_transformer'):
+        if not self.data_config["pca"]["enabled"] or not self.pca_transformer:
             return None
             
         return {
-            'explained_variance_ratio': self.explained_variance_ratio,
-            'n_components': self.data_config["pca"]["n_components"],
-            'total_variance_explained': np.sum(self.explained_variance_ratio)
+            'explained_variance_ratio': self.explained_variance_ratio.tolist() if hasattr(self, 'explained_variance_ratio') else [],
+            'n_components': self.pca_n_components_determined,
+            'total_variance_explained': np.sum(self.explained_variance_ratio) if hasattr(self, 'explained_variance_ratio') else 0
         }
 
 

@@ -14,7 +14,9 @@
         "target_column": "fraud_Cases",
         "pca": {
             "enabled": true,
-            "n_components": 7,
+            "target_variance": 0.60,
+            "min_components": 4,
+            "max_components": 10,
             "whiten": false,
             "svd_solver": "auto"
         },
@@ -35,20 +37,13 @@
             "learn_from_data": false
         },
         "estimators": {
-            "mle": {
-                "enabled": true
-            },
             "bayes": {
                 "enabled": true,
                 "prior_type": "BDeu",
-                "equivalent_sample_size": 0.5,
-                "pseudocount": 2
+                "equivalent_sample_size": 5
             }
         },
         "prediction": {
-            "mle": {
-                "threshold": 0.5
-            },
             "bayes": {
                 "threshold": 0.65,
                 "adjust_probabilities": true
@@ -58,8 +53,8 @@
     "structure_learning": {
         "algorithm": "hill_climbing",
         "scoring_method": "bdeu",
-        "max_indegree": 3,
-        "max_iter": 10000
+        "max_iter_hill_climb": 100,
+        "bdeu_equivalent_sample_size": 10
     },
     "output": {
         "save_models": true,
